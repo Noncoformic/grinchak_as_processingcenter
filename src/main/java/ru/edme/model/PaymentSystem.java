@@ -1,20 +1,20 @@
 package ru.edme.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import jakarta.persistence.*;
+import lombok.*;
 
 @Getter
 @Setter
 @ToString
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-
+@Entity
+@Table(name = "payment_system")
 public class PaymentSystem {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "payment_system_name", nullable = false, unique = true)
     private String paymentSystemName;
 }

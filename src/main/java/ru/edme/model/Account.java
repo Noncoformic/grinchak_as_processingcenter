@@ -1,11 +1,7 @@
 package ru.edme.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import jakarta.persistence.*;
+import lombok.*;
 
 import java.math.BigDecimal;
 
@@ -15,12 +11,32 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-
+@Entity
+@Table(name = "account") // Название таблицы в БД
 public class Account {
-    private Long id;
-    private String accountNumber;
-    private BigDecimal balance;
-    private Long currencyId;
-    private Long issuingBankId;
 
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
+
+  @Column(name = "account_number", nullable = false, unique = true)
+  private String accountNumber;
+
+  @Column(name = "balance", nullable = false)
+  private BigDecimal balance;
+
+  @Column(name = "currency_id", nullable = false)
+  private Long currencyId;
+
+  @Column(name = "issuing_bank_id", nullable = false)
+  private Long issuingBankId;
+
+  public AccountBuilder toBuilder() {
+    return builder()
+        .id(id)
+        .accountNumber(accountNumber)
+        .balance(balance)
+        .currencyId(currencyId)
+        .issuingBankId(issuingBankId);
+  }
 }

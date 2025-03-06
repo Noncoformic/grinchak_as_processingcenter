@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class AcquiringBankJDBCDaoImpl implements Dao<AcquiringBank> {
 
@@ -85,17 +86,17 @@ public class AcquiringBankJDBCDaoImpl implements Dao<AcquiringBank> {
     }
 
     @Override
-    public AcquiringBank getById(Long id) {
+    public Optional<AcquiringBank> getById(Long id) {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
             pstmt.setLong(1, id);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                return new AcquiringBank(
+                return Optional.of(new AcquiringBank(
                         rs.getLong("id"),
                         rs.getString("bic"),
                         rs.getString("abbreviated_name")
-                );
+                ));
             }
         } catch (SQLException e) {
             throw new RuntimeException("Error fetching AcquiringBank by ID", e);

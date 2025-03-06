@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class PaymentSystemJDBCDaoImpl implements Dao<PaymentSystem> {
 
@@ -99,16 +100,16 @@ public class PaymentSystemJDBCDaoImpl implements Dao<PaymentSystem> {
     }
 
     @Override
-    public PaymentSystem getById(Long id) {
+    public Optional<PaymentSystem> getById(Long id) {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
             pstmt.setLong(1, id);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                return new PaymentSystem(
+                return Optional.of(new PaymentSystem(
                         rs.getLong("id"),
                         rs.getString("payment_system_name")
-                );
+                ));
             }
         } catch (SQLException e) {
             throw new RuntimeException("Error fetching PaymentSystem by ID", e);

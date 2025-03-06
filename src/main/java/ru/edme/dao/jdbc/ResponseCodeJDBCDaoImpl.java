@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class ResponseCodeJDBCDaoImpl implements Dao<ResponseCode> {
     private static final String CREATE_TABLE = """
@@ -105,18 +106,18 @@ public class ResponseCodeJDBCDaoImpl implements Dao<ResponseCode> {
     }
 
     @Override
-    public ResponseCode getById(Long id) {
+    public Optional<ResponseCode> getById(Long id) {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
             pstmt.setLong(1, id);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                return new ResponseCode(
+                return Optional.of(new ResponseCode(
                         rs.getLong("id"),
                         rs.getString("error_code"),
                         rs.getString("error_description"),
                         rs.getString("error_level")
-                );
+                ));
             }
         } catch (SQLException e) {
             throw new RuntimeException("Error fetching ResponseCode by ID", e);

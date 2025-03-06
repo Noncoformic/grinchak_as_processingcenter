@@ -13,6 +13,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class TransactionJDBCDaoImpl implements Dao<Transaction> {
 
@@ -154,7 +155,7 @@ private static final String CLEAR_TABLE = "TRUNCATE TABLE transaction RESTART ID
   }
 
   @Override
-  public Transaction getById(Long id) {
+  public Optional<Transaction> getById(Long id) {
     return null;
   }
 

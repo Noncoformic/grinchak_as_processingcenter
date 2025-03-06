@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class MerchantCategoryCodeJDBCDaoImpl implements Dao<MerchantCategoryCode> {
   private static final String CREATE_TABLE =
@@ -111,17 +112,17 @@ public class MerchantCategoryCodeJDBCDaoImpl implements Dao<MerchantCategoryCode
   }
 
   @Override
-  public MerchantCategoryCode getById(Long id) {
+  public Optional<MerchantCategoryCode> getById(Long id) {
     try (Connection connection = JDBCConfig.getConnection();
          PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
       pstmt.setLong(1, id);
       ResultSet rs = pstmt.executeQuery();
       if (rs.next()) {
-        return new MerchantCategoryCode(
+        return Optional.of(new MerchantCategoryCode(
                 rs.getLong("id"),
                 rs.getString("mcc"),
                 rs.getString("mcc_name")
-        );
+        ));
       }
     } catch (SQLException e) {
       throw new RuntimeException("Error fetching MerchantCategoryCode by ID", e);
