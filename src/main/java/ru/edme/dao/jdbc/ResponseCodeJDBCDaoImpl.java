@@ -1,5 +1,7 @@
 package ru.edme.dao.jdbc;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Repository;
 import ru.edme.configuration.JDBCConfig;
 import ru.edme.dao.Dao;
 import ru.edme.model.ResponseCode;
@@ -13,18 +15,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
+@Repository
 public class ResponseCodeJDBCDaoImpl implements Dao<ResponseCode> {
+
     private static final String CREATE_TABLE = """
             CREATE TABLE IF NOT EXISTS response_code (
                 id SERIAL PRIMARY KEY,
-                error_code VARCHAR(2) NOT NULL,
+                error_code VARCHAR(2) NOT NULL UNIQUE,
                 error_description VARCHAR(255) NOT NULL,
                 error_level VARCHAR(255) NOT NULL
             );
             """;
 
     private static final String INSERT = """
-            INSERT INTO response_code (error_code, error_description, error_level) VALUES (?, ?, ?);
+            INSERT INTO response_code (error_code, error_description, error_level) 
+            VALUES (?, ?, ?) 
+            ON CONFLICT (error_code) DO NOTHING RETURNING id;
             """;
 
     private static final String GET_BY_ID = "SELECT * FROM response_code WHERE id = ?;";
@@ -32,57 +39,68 @@ public class ResponseCodeJDBCDaoImpl implements Dao<ResponseCode> {
             UPDATE response_code SET error_code = ?, error_description = ?, error_level = ? WHERE id = ?;
             """;
     private static final String DELETE = "DELETE FROM response_code WHERE id = ?;";
-
-
-
     private static final String GET_ALL = "SELECT * FROM response_code;";
+    private static final String CLEAR_TABLE = "TRUNCATE TABLE response_code RESTART IDENTITY CASCADE;";
+    private static final String DROP_TABLE = "DROP TABLE IF EXISTS response_code CASCADE;";
 
     @Override
     public void createTable() {
-        try(Connection connection = JDBCConfig.getConnection();
-            Statement stmt = connection.createStatement()){
+        try (Connection connection = JDBCConfig.getConnection();
+             Statement stmt = connection.createStatement()) {
             stmt.executeUpdate(CREATE_TABLE);
-
-        }catch (SQLException e){
-            throw new RuntimeException("Error create ResponseCode table", e);
+            log.info("Created table 'ResponseCode' successfully.");
+        } catch (SQLException e) {
+            log.error("Error creating ResponseCode table", e);
+            throw new RuntimeException("Error creating ResponseCode table", e);
         }
-
     }
 
     @Override
     public void dropTable() {
-
+        try (Connection connection = JDBCConfig.getConnection();
+             Statement stmt = connection.createStatement()) {
+            stmt.executeUpdate(DROP_TABLE);
+            log.info("Dropped ResponseCode table successfully.");
+        } catch (SQLException e) {
+            log.error("Error dropping ResponseCode table", e);
+            throw new RuntimeException("Error dropping ResponseCode table", e);
+        }
     }
 
     @Override
     public void clearTable() {
-
+        try (Connection connection = JDBCConfig.getConnection();
+             Statement stmt = connection.createStatement()) {
+            stmt.executeUpdate(CLEAR_TABLE);
+            log.info("ResponseCode table cleared.");
+        } catch (SQLException e) {
+            log.error("Error clearing ResponseCode table", e);
+            throw new RuntimeException("Error clearing ResponseCode table", e);
+        }
     }
 
     @Override
     public void insert(ResponseCode responseCode) {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
+
             pstmt.setString(1, responseCode.getErrorCode());
             pstmt.setString(2, responseCode.getErrorDescription());
             pstmt.setString(3, responseCode.getErrorLevel());
-            pstmt.executeUpdate();
+
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                try (ResultSet rs = pstmt.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        responseCode.setId(rs.getLong(1));
+                        log.info("Inserted new ResponseCode: {}", responseCode);
+                    }
+                }
+            }
         } catch (SQLException e) {
-            throw new RuntimeException("Ошибка при вставке в таблицу ResponseCode", e);
+            log.error("Error inserting into ResponseCode table", e);
+            throw new RuntimeException("Error inserting into ResponseCode table", e);
         }
-
-    }
-
-    @Override
-    public void delete(Long id) {
-        try (Connection connection = JDBCConfig.getConnection();
-             PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
-            pstmt.setLong(1, id);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            throw new RuntimeException("Error deleting ResponseCode", e);
-        }
-
     }
 
     @Override
@@ -91,16 +109,13 @@ public class ResponseCodeJDBCDaoImpl implements Dao<ResponseCode> {
         try (Connection conn = JDBCConfig.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(GET_ALL)) {
+
             while (rs.next()) {
-                responseCodes.add(new ResponseCode(
-                        rs.getLong("id"),
-                        rs.getString("error_code"),
-                        rs.getString("error_description"),
-                        rs.getString("error_level")
-                ));
+                responseCodes.add(mapResultSetToResponseCode(rs));
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Ошибка при получении всех кодов ответов", e);
+            log.error("Error fetching all ResponseCodes", e);
+            throw new RuntimeException("Error fetching all ResponseCodes", e);
         }
         return responseCodes;
     }
@@ -110,19 +125,17 @@ public class ResponseCodeJDBCDaoImpl implements Dao<ResponseCode> {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
             pstmt.setLong(1, id);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return Optional.of(new ResponseCode(
-                        rs.getLong("id"),
-                        rs.getString("error_code"),
-                        rs.getString("error_description"),
-                        rs.getString("error_level")
-                ));
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToResponseCode(rs));
+                }
             }
+            log.warn("ResponseCode with id {} not found.", id);
         } catch (SQLException e) {
-            throw new RuntimeException("Error fetching ResponseCode by ID", e);
+            log.error("Error getting ResponseCode by ID", e);
+            throw new RuntimeException("Error getting ResponseCode by ID", e);
         }
-        return null;
+        return Optional.empty();
     }
 
     @Override
@@ -133,10 +146,42 @@ public class ResponseCodeJDBCDaoImpl implements Dao<ResponseCode> {
             pstmt.setString(2, responseCode.getErrorDescription());
             pstmt.setString(3, responseCode.getErrorLevel());
             pstmt.setLong(4, responseCode.getId());
-            pstmt.executeUpdate();
+
+            int rowsUpdated = pstmt.executeUpdate();
+            if (rowsUpdated > 0) {
+                log.info("Updated ResponseCode: {}", responseCode);
+            } else {
+                log.warn("No ResponseCode found to update with id {}", responseCode.getId());
+            }
         } catch (SQLException e) {
+            log.error("Error updating ResponseCode", e);
             throw new RuntimeException("Error updating ResponseCode", e);
         }
+    }
 
+    @Override
+    public void delete(Long id) {
+        try (Connection connection = JDBCConfig.getConnection();
+             PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
+            pstmt.setLong(1, id);
+            int rowsDeleted = pstmt.executeUpdate();
+            if (rowsDeleted > 0) {
+                log.info("Deleted ResponseCode with id {}", id);
+            } else {
+                log.warn("No ResponseCode found to delete with id {}", id);
+            }
+        } catch (SQLException e) {
+            log.error("Error deleting ResponseCode", e);
+            throw new RuntimeException("Error deleting ResponseCode", e);
+        }
+    }
+
+    private ResponseCode mapResultSetToResponseCode(ResultSet rs) throws SQLException {
+        return ResponseCode.builder()
+                .id(rs.getLong("id"))
+                .errorCode(rs.getString("error_code"))
+                .errorDescription(rs.getString("error_description"))
+                .errorLevel(rs.getString("error_level"))
+                .build();
     }
 }

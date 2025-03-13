@@ -1,7 +1,7 @@
 package ru.edme.dao.jdbc;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Repository;
 import ru.edme.configuration.JDBCConfig;
 import ru.edme.dao.Dao;
 import ru.edme.model.IssuingBank;
@@ -15,8 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
+@Repository
 public class IssuingBankJDBCDaoImpl implements Dao<IssuingBank> {
-    private static final Logger logger = LogManager.getLogger(IssuingBankJDBCDaoImpl.class);
+
     private static final String CREATE_TABLE = """
             CREATE TABLE IF NOT EXISTS issuing_bank (
                 id BIGSERIAL PRIMARY KEY,
@@ -24,37 +26,44 @@ public class IssuingBankJDBCDaoImpl implements Dao<IssuingBank> {
                 abbreviated_name VARCHAR(255) NOT NULL
             );
             """;
-    private static final String DROP_COLUMN = "ALTER TABLE issuing_bank DROP COLUMN IF EXISTS bin;";
+
     private static final String DROP_TABLE = "DROP TABLE IF EXISTS issuing_bank CASCADE";
-    private static final String INSERT = "INSERT INTO issuing_bank (bic, abbreviated_name) VALUES (?, ?);";
+
+    private static final String INSERT = """
+            INSERT INTO issuing_bank (bic, abbreviated_name) 
+            VALUES (?, ?) 
+            ON CONFLICT (bic) DO NOTHING RETURNING id;
+            """;
+
     private static final String GET_ALL = "SELECT * FROM issuing_bank;";
     private static final String GET_BY_ID = "SELECT * FROM issuing_bank WHERE id = ?;";
-    private static final String UPDATE = "UPDATE issuing_bank SET bic = ?, abbreviated_name = ? WHERE id = ?;";
+    private static final String UPDATE = """
+            UPDATE issuing_bank SET bic = ?, abbreviated_name = ? 
+            WHERE id = ?;
+            """;
     private static final String DELETE = "DELETE FROM issuing_bank WHERE id = ?;";
     private static final String CLEAR_TABLE = "TRUNCATE TABLE issuing_bank RESTART IDENTITY CASCADE;";
-    private static final String CHECK_EXISTENCE = "SELECT * FROM issuing_bank WHERE bic = ?;";
 
     @Override
     public void createTable() {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
-            logger.info("Creating table 'IssuingBank'...");
             stmt.executeUpdate(CREATE_TABLE);
-            logger.info("Created table 'IssuingBank'!");
+            log.info("Created table 'IssuingBank' successfully.");
         } catch (SQLException e) {
-            logger.error("Error creating IssuingBank table", e);
+            log.error("Error creating IssuingBank table", e);
             throw new RuntimeException("Error creating IssuingBank table", e);
         }
     }
+
     @Override
     public void dropTable() {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
-            logger.info("Dropping IssuingBank table....");
             stmt.executeUpdate(DROP_TABLE);
-            logger.info("Dropped IssuingBank table successfully");
+            log.info("Dropped IssuingBank table successfully.");
         } catch (SQLException e) {
-            logger.error("Error dropping IssuingBank table", e);
+            log.error("Error dropping IssuingBank table", e);
             throw new RuntimeException("Error dropping IssuingBank table", e);
         }
     }
@@ -64,46 +73,33 @@ public class IssuingBankJDBCDaoImpl implements Dao<IssuingBank> {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
             stmt.executeUpdate(CLEAR_TABLE);
+            log.info("IssuingBank table cleared.");
         } catch (SQLException e) {
-            logger.error("Error clearing IssuingBank table", e);
+            log.error("Error clearing IssuingBank table", e);
             throw new RuntimeException("Error clearing IssuingBank table", e);
         }
     }
 
     @Override
     public void insert(IssuingBank issuingBank) {
-        try (Connection connection = JDBCConfig.getConnection()) {
-            // Проверка на существование
-            try (PreparedStatement checkStmt = connection.prepareStatement(CHECK_EXISTENCE)) {
-                logger.info("Checking if IssuingBank already exists...");
-                checkStmt.setString(1, issuingBank.getBic());
-                ResultSet rs = checkStmt.executeQuery();
-                if (rs.next()) {
-                    logger.error(" ⚠\uFE0F IssuingBank with bic " + issuingBank.getBic() + " already exists.");
-                    return;
+        try (Connection connection = JDBCConfig.getConnection();
+             PreparedStatement pstmt = connection.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
+
+            pstmt.setString(1, issuingBank.getBic());
+            pstmt.setString(2, issuingBank.getAbbreviatedName());
+
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                try (ResultSet rs = pstmt.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        issuingBank.setId(rs.getLong(1));
+                        log.info("Inserted new IssuingBank: {}", issuingBank);
+                    }
                 }
             }
-            try (PreparedStatement pstmt = connection.prepareStatement(INSERT)) {
-                pstmt.setString(1, issuingBank.getBic());
-                pstmt.setString(2, issuingBank.getAbbreviatedName());
-                pstmt.executeUpdate();
-            }
         } catch (SQLException e) {
-            logger.error("Error inserting into IssuingBank table", e);
+            log.error("Error inserting into IssuingBank table", e);
             throw new RuntimeException("Error inserting into IssuingBank table", e);
-        }
-    }
-
-    @Override
-    public void delete(Long id) {
-        try (Connection connection = JDBCConfig.getConnection();
-             PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
-            pstmt.setLong(1, id);
-            pstmt.executeUpdate();
-            logger.info("IssuingBank deleted");
-        } catch (SQLException e) {
-            logger.error("Error deleting IssuingBank", e);
-            throw new RuntimeException("Error deleting IssuingBank", e);
         }
     }
 
@@ -113,15 +109,12 @@ public class IssuingBankJDBCDaoImpl implements Dao<IssuingBank> {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(GET_ALL)) {
+
             while (rs.next()) {
-                issuingBanks.add(IssuingBank.builder()
-                        .id(rs.getLong("id"))
-                        .bic(rs.getString("bic"))
-                        .abbreviatedName(rs.getString("abbreviated_name"))
-                        .build());
+                issuingBanks.add(mapResultSetToIssuingBank(rs));
             }
         } catch (SQLException e) {
-            logger.error("Error fetching all IssuingBanks", e);
+            log.error("Error fetching all IssuingBanks", e);
             throw new RuntimeException("Error fetching all IssuingBanks", e);
         }
         return issuingBanks;
@@ -132,18 +125,14 @@ public class IssuingBankJDBCDaoImpl implements Dao<IssuingBank> {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
             pstmt.setLong(1, id);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return Optional.of(IssuingBank.builder()
-                        .id(rs.getLong("id"))
-                        .bic(rs.getString("bic"))
-                        .abbreviatedName(rs.getString("abbreviated_name"))
-                        .build());
-            } else {
-                logger.error("IssuingBank with id {} not found.", id);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToIssuingBank(rs));
+                }
             }
+            log.warn("IssuingBank with id {} not found.", id);
         } catch (SQLException e) {
-            logger.error("Error getting IssuingBank by ID", e);
+            log.error("Error getting IssuingBank by ID", e);
             throw new RuntimeException("Error getting IssuingBank by ID", e);
         }
         return Optional.empty();
@@ -156,11 +145,41 @@ public class IssuingBankJDBCDaoImpl implements Dao<IssuingBank> {
             pstmt.setString(1, issuingBank.getBic());
             pstmt.setString(2, issuingBank.getAbbreviatedName());
             pstmt.setLong(3, issuingBank.getId());
-            pstmt.executeUpdate();
-            logger.info("IssuingBank updated: {}", issuingBank);
+
+            int rowsUpdated = pstmt.executeUpdate();
+            if (rowsUpdated > 0) {
+                log.info("Updated IssuingBank: {}", issuingBank);
+            } else {
+                log.warn("No IssuingBank found to update with id {}", issuingBank.getId());
+            }
         } catch (SQLException e) {
-            logger.error("Error updating IssuingBank", e);
+            log.error("Error updating IssuingBank", e);
             throw new RuntimeException("Error updating IssuingBank", e);
         }
+    }
+
+    @Override
+    public void delete(Long id) {
+        try (Connection connection = JDBCConfig.getConnection();
+             PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
+            pstmt.setLong(1, id);
+            int rowsDeleted = pstmt.executeUpdate();
+            if (rowsDeleted > 0) {
+                log.info("Deleted IssuingBank with id {}", id);
+            } else {
+                log.warn("No IssuingBank found to delete with id {}", id);
+            }
+        } catch (SQLException e) {
+            log.error("Error deleting IssuingBank", e);
+            throw new RuntimeException("Error deleting IssuingBank", e);
+        }
+    }
+
+    private IssuingBank mapResultSetToIssuingBank(ResultSet rs) throws SQLException {
+        return IssuingBank.builder()
+                .id(rs.getLong("id"))
+                .bic(rs.getString("bic"))
+                .abbreviatedName(rs.getString("abbreviated_name"))
+                .build();
     }
 }

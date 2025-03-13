@@ -1,5 +1,7 @@
 package ru.edme.dao.jdbc;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Repository;
 import ru.edme.configuration.JDBCConfig;
 import ru.edme.dao.Dao;
 import ru.edme.model.MerchantCategoryCode;
@@ -13,9 +15,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
+@Repository
 public class MerchantCategoryCodeJDBCDaoImpl implements Dao<MerchantCategoryCode> {
-  private static final String CREATE_TABLE =
-      """
+
+  private static final String CREATE_TABLE = """
             CREATE TABLE IF NOT EXISTS merchant_category_code (
                 id SERIAL PRIMARY KEY,
                 mcc VARCHAR(4) NOT NULL UNIQUE,
@@ -23,74 +27,77 @@ public class MerchantCategoryCodeJDBCDaoImpl implements Dao<MerchantCategoryCode
             );
             """;
 
-  private static final String INSERT =
-      """
-            INSERT INTO merchant_category_code (mcc, mcc_name) VALUES (?, ?);
+  private static final String INSERT = """
+            INSERT INTO merchant_category_code (mcc, mcc_name) 
+            VALUES (?, ?) 
+            ON CONFLICT (mcc) DO NOTHING RETURNING id;
             """;
 
   private static final String GET_ALL = "SELECT * FROM merchant_category_code;";
-
   private static final String GET_BY_ID = "SELECT * FROM merchant_category_code WHERE id = ?;";
-  private static final String UPDATE =
-      """
+  private static final String UPDATE = """
             UPDATE merchant_category_code SET mcc = ?, mcc_name = ? WHERE id = ?;
             """;
   private static final String DELETE = "DELETE FROM merchant_category_code WHERE id = ?;";
-  private static final String CHECK_EXISTENCE = """
-        SELECT COUNT(*) FROM merchant_category_code WHERE mcc = ?;
-        """;
+  private static final String CLEAR_TABLE = "TRUNCATE TABLE merchant_category_code RESTART IDENTITY CASCADE;";
+  private static final String DROP_TABLE = "DROP TABLE IF EXISTS merchant_category_code CASCADE;";
 
   @Override
   public void createTable() {
     try (Connection connection = JDBCConfig.getConnection();
-        Statement stmt = connection.createStatement()) {
+         Statement stmt = connection.createStatement()) {
       stmt.executeUpdate(CREATE_TABLE);
+      log.info("Created table 'MerchantCategoryCode' successfully.");
     } catch (SQLException e) {
-      throw new RuntimeException("Ошибка при создании таблицы MerchantCategoryCode", e);
+      log.error("Error creating MerchantCategoryCode table", e);
+      throw new RuntimeException("Error creating MerchantCategoryCode table", e);
     }
   }
 
   @Override
-  public void dropTable() {}
+  public void dropTable() {
+    try (Connection connection = JDBCConfig.getConnection();
+         Statement stmt = connection.createStatement()) {
+      stmt.executeUpdate(DROP_TABLE);
+      log.info("Dropped MerchantCategoryCode table successfully.");
+    } catch (SQLException e) {
+      log.error("Error dropping MerchantCategoryCode table", e);
+      throw new RuntimeException("Error dropping MerchantCategoryCode table", e);
+    }
+  }
 
   @Override
-  public void clearTable() {}
+  public void clearTable() {
+    try (Connection connection = JDBCConfig.getConnection();
+         Statement stmt = connection.createStatement()) {
+      stmt.executeUpdate(CLEAR_TABLE);
+      log.info("MerchantCategoryCode table cleared.");
+    } catch (SQLException e) {
+      log.error("Error clearing MerchantCategoryCode table", e);
+      throw new RuntimeException("Error clearing MerchantCategoryCode table", e);
+    }
+  }
 
   @Override
   public void insert(MerchantCategoryCode mcc) {
-    try (Connection connection = JDBCConfig.getConnection()) {
-      // Проверяем, существует ли уже этот MCC-код
-      try (PreparedStatement checkStmt = connection.prepareStatement(CHECK_EXISTENCE)) {
-        checkStmt.setString(1, mcc.getMcc());
-        ResultSet rs = checkStmt.executeQuery();
-        if (rs.next() && rs.getInt(1) > 0) {
-          System.out.println("⚠️ MCC '" + mcc.getMcc() + "' already exists. Skipping insert.");
-          return; // Просто пропускаем вставку
+    try (Connection connection = JDBCConfig.getConnection();
+         PreparedStatement pstmt = connection.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
+
+      pstmt.setString(1, mcc.getMcc());
+      pstmt.setString(2, mcc.getMccName());
+
+      int affectedRows = pstmt.executeUpdate();
+      if (affectedRows > 0) {
+        try (ResultSet rs = pstmt.getGeneratedKeys()) {
+          if (rs.next()) {
+            mcc.setId(rs.getLong(1));
+            log.info("Inserted new MerchantCategoryCode: {}", mcc);
+          }
         }
       }
-
-      // Если MCC-код не найден, вставляем его
-      try (PreparedStatement pstmt = connection.prepareStatement(INSERT)) {
-        pstmt.setString(1, mcc.getMcc());
-        pstmt.setString(2, mcc.getMccName());
-        pstmt.executeUpdate();
-        System.out.println("✅ MCC added: " + mcc.getMcc());
-      }
-
     } catch (SQLException e) {
-      throw new RuntimeException("Ошибка при вставке в таблицу MerchantCategoryCode", e);
-    }
-  }
-
-
-  @Override
-  public void delete(Long id) {
-    try (Connection connection = JDBCConfig.getConnection();
-        PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
-      pstmt.setLong(1, id);
-      pstmt.executeUpdate();
-    } catch (SQLException e) {
-      throw new RuntimeException("Error deleting MerchantCategoryCode", e);
+      log.error("Error inserting into MerchantCategoryCode table", e);
+      throw new RuntimeException("Error inserting into MerchantCategoryCode table", e);
     }
   }
 
@@ -98,15 +105,15 @@ public class MerchantCategoryCodeJDBCDaoImpl implements Dao<MerchantCategoryCode
   public List<MerchantCategoryCode> getAll() {
     List<MerchantCategoryCode> mccList = new ArrayList<>();
     try (Connection connection = JDBCConfig.getConnection();
-        Statement stmt = connection.createStatement();
-        ResultSet rs = stmt.executeQuery(GET_ALL)) {
+         Statement stmt = connection.createStatement();
+         ResultSet rs = stmt.executeQuery(GET_ALL)) {
+
       while (rs.next()) {
-        mccList.add(
-            new MerchantCategoryCode(
-                rs.getLong("id"), rs.getString("mcc"), rs.getString("mcc_name")));
+        mccList.add(mapResultSetToMCC(rs));
       }
     } catch (SQLException e) {
-      throw new RuntimeException("Ошибка при получении всех MCC-кодов", e);
+      log.error("Error fetching all MerchantCategoryCodes", e);
+      throw new RuntimeException("Error fetching all MerchantCategoryCodes", e);
     }
     return mccList;
   }
@@ -116,19 +123,17 @@ public class MerchantCategoryCodeJDBCDaoImpl implements Dao<MerchantCategoryCode
     try (Connection connection = JDBCConfig.getConnection();
          PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
       pstmt.setLong(1, id);
-      ResultSet rs = pstmt.executeQuery();
-      if (rs.next()) {
-        return Optional.of(new MerchantCategoryCode(
-                rs.getLong("id"),
-                rs.getString("mcc"),
-                rs.getString("mcc_name")
-        ));
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          return Optional.of(mapResultSetToMCC(rs));
+        }
       }
+      log.warn("MerchantCategoryCode with id {} not found.", id);
     } catch (SQLException e) {
-      throw new RuntimeException("Error fetching MerchantCategoryCode by ID", e);
+      log.error("Error getting MerchantCategoryCode by ID", e);
+      throw new RuntimeException("Error getting MerchantCategoryCode by ID", e);
     }
-
-    return null;
+    return Optional.empty();
   }
 
   @Override
@@ -138,9 +143,41 @@ public class MerchantCategoryCodeJDBCDaoImpl implements Dao<MerchantCategoryCode
       pstmt.setString(1, mcc.getMcc());
       pstmt.setString(2, mcc.getMccName());
       pstmt.setLong(3, mcc.getId());
-      pstmt.executeUpdate();
+
+      int rowsUpdated = pstmt.executeUpdate();
+      if (rowsUpdated > 0) {
+        log.info("Updated MerchantCategoryCode: {}", mcc);
+      } else {
+        log.warn("No MerchantCategoryCode found to update with id {}", mcc.getId());
+      }
     } catch (SQLException e) {
+      log.error("Error updating MerchantCategoryCode", e);
       throw new RuntimeException("Error updating MerchantCategoryCode", e);
     }
+  }
+
+  @Override
+  public void delete(Long id) {
+    try (Connection connection = JDBCConfig.getConnection();
+         PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
+      pstmt.setLong(1, id);
+      int rowsDeleted = pstmt.executeUpdate();
+      if (rowsDeleted > 0) {
+        log.info("Deleted MerchantCategoryCode with id {}", id);
+      } else {
+        log.warn("No MerchantCategoryCode found to delete with id {}", id);
+      }
+    } catch (SQLException e) {
+      log.error("Error deleting MerchantCategoryCode", e);
+      throw new RuntimeException("Error deleting MerchantCategoryCode", e);
+    }
+  }
+
+  private MerchantCategoryCode mapResultSetToMCC(ResultSet rs) throws SQLException {
+    return MerchantCategoryCode.builder()
+            .id(rs.getLong("id"))
+            .mcc(rs.getString("mcc"))
+            .mccName(rs.getString("mcc_name"))
+            .build();
   }
 }

@@ -1,21 +1,24 @@
 package ru.edme.model;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
 
-@Getter
-@Setter
-@ToString
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
+@Entity
 
+@Table(name = "transaction_type")
 
 public class TransactionType {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(name = "transaction_type_name")
     private String transactionTypeName;
+    @Column(name = "operator")
     private String operator;
 }

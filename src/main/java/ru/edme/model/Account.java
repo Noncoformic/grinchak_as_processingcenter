@@ -5,38 +5,33 @@ import lombok.*;
 
 import java.math.BigDecimal;
 
-@Getter
-@Setter
-@ToString
-@Builder
+
+@Data
+@Builder(toBuilder = true) // Автоматически создаёт `toBuilder()`
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "account") // Название таблицы в БД
+@Table(name = "account")
 public class Account {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(name = "account_number", nullable = false, unique = true)
+  @Column(name = "account_number", nullable = false, unique = true, length = 20)
   private String accountNumber;
 
-  @Column(name = "balance", nullable = false)
+  @Column(name = "balance", nullable = false, precision = 19, scale = 2)
   private BigDecimal balance;
 
-  @Column(name = "currency_id", nullable = false)
-  private Long currencyId;
+  // Связь с `Currency`
+  @ManyToOne
+  @JoinColumn(name = "currency_id", nullable = false)
+  private Currency currency;
 
-  @Column(name = "issuing_bank_id", nullable = false)
-  private Long issuingBankId;
-
-  public AccountBuilder toBuilder() {
-    return builder()
-        .id(id)
-        .accountNumber(accountNumber)
-        .balance(balance)
-        .currencyId(currencyId)
-        .issuingBankId(issuingBankId);
-  }
+  // Связь с `IssuingBank`
+  @ManyToOne
+  @JoinColumn(name = "issuing_bank_id", nullable = false)
+  private IssuingBank issuingBank;
 }
+

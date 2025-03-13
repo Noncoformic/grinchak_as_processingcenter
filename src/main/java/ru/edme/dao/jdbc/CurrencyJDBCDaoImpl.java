@@ -1,7 +1,7 @@
 package ru.edme.dao.jdbc;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Repository;
 import ru.edme.configuration.JDBCConfig;
 import ru.edme.dao.Dao;
 import ru.edme.model.Currency;
@@ -15,8 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
+@Repository
 public class CurrencyJDBCDaoImpl implements Dao<Currency> {
-    private static final Logger logger = LogManager.getLogger(CurrencyJDBCDaoImpl.class);
+
     private static final String CREATE_TABLE = """
             CREATE TABLE IF NOT EXISTS currency (
                 id BIGSERIAL PRIMARY KEY,
@@ -25,25 +27,33 @@ public class CurrencyJDBCDaoImpl implements Dao<Currency> {
                 currency_name VARCHAR(100) NOT NULL
             );
             """;
+
     private static final String DROP_TABLE = "DROP TABLE IF EXISTS currency CASCADE";
-    private static final String INSERT = "INSERT INTO currency (currency_digital_code, currency_letter_code, currency_name) VALUES (?, ?, ?);";
+
+    private static final String INSERT = """
+        INSERT INTO currency (currency_digital_code, currency_letter_code, currency_name) 
+        VALUES (?, ?, ?) 
+        ON CONFLICT DO NOTHING
+        RETURNING id;
+        """;
+
     private static final String GET_ALL = "SELECT * FROM currency;";
     private static final String GET_BY_ID = "SELECT * FROM currency WHERE id = ?;";
-    private static final String UPDATE = "UPDATE currency SET currency_digital_code = ?, currency_letter_code = ?, currency_name = ? WHERE id = ?;";
+    private static final String UPDATE = """
+            UPDATE currency SET currency_digital_code = ?, currency_letter_code = ?, currency_name = ? 
+            WHERE id = ?;
+            """;
     private static final String DELETE = "DELETE FROM currency WHERE id = ?;";
     private static final String CLEAR_TABLE = "TRUNCATE TABLE currency RESTART IDENTITY CASCADE;";
-    private static final String CHECK_EXISTENCE_DIGITAL = "SELECT * FROM currency WHERE currency_digital_code = ?;";
-    private static final String CHECK_EXISTENCE_LETTER = "SELECT * FROM currency WHERE currency_letter_code = ?;";
 
     @Override
     public void createTable() {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
-            logger.info("Creating table 'Currency'...");
             stmt.executeUpdate(CREATE_TABLE);
-            logger.info("Created table 'Currency'!");
+            log.info("Created table 'Currency' successfully.");
         } catch (SQLException e) {
-            logger.error("Error creating Currency table", e);
+            log.error("Error creating Currency table", e);
             throw new RuntimeException("Error creating Currency table", e);
         }
     }
@@ -52,11 +62,10 @@ public class CurrencyJDBCDaoImpl implements Dao<Currency> {
     public void dropTable() {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
-            logger.info("Dropping Currency table....");
             stmt.executeUpdate(DROP_TABLE);
-            logger.info("Dropped Currency table successfully");
+            log.info("Dropped Currency table successfully.");
         } catch (SQLException e) {
-            logger.error("Error dropping Currency table", e);
+            log.error("Error dropping Currency table", e);
             throw new RuntimeException("Error dropping Currency table", e);
         }
     }
@@ -66,57 +75,34 @@ public class CurrencyJDBCDaoImpl implements Dao<Currency> {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
             stmt.executeUpdate(CLEAR_TABLE);
+            log.info("Currency table cleared.");
         } catch (SQLException e) {
-            logger.error("Error clearing Currency table", e);
+            log.error("Error clearing Currency table", e);
             throw new RuntimeException("Error clearing Currency table", e);
         }
     }
 
     @Override
     public void insert(Currency currency) {
-        try (Connection connection = JDBCConfig.getConnection()) {
-            // Проверка на существование
-            try (PreparedStatement checkStmtDigital = connection.prepareStatement(CHECK_EXISTENCE_DIGITAL)) {
-                logger.info("Checking if Currency with digital code already exists...");
-                checkStmtDigital.setString(1, currency.getCurrencyDigitalCode());
-                ResultSet rsDigital = checkStmtDigital.executeQuery();
-                if (rsDigital.next()) {
-                    logger.error(" ⚠\uFE0F Currency with digital code " + currency.getCurrencyDigitalCode() + " already exists.");
-                    return;
-                }
-            }
-            try (PreparedStatement checkStmtLetter = connection.prepareStatement(CHECK_EXISTENCE_LETTER)) {
-                logger.info("Checking if Currency with letter code already exists...");
-                checkStmtLetter.setString(1, currency.getCurrencyLetterCode());
-                ResultSet rsLetter = checkStmtLetter.executeQuery();
-                if (rsLetter.next()) {
-                    logger.error(" ⚠\uFE0F Currency with letter code " + currency.getCurrencyLetterCode() + " already exists.");
-                    return;
-                }
-            }
-
-            try (PreparedStatement pstmt = connection.prepareStatement(INSERT)) {
-                pstmt.setString(1, currency.getCurrencyDigitalCode());
-                pstmt.setString(2, currency.getCurrencyLetterCode());
-                pstmt.setString(3, currency.getCurrencyName());
-                pstmt.executeUpdate();
-            }
-        } catch (SQLException e) {
-            logger.error("Error inserting into Currency table", e);
-            throw new RuntimeException("Error inserting into Currency table", e);
-        }
-    }
-
-    @Override
-    public void delete(Long id) {
         try (Connection connection = JDBCConfig.getConnection();
-             PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
-            pstmt.setLong(1, id);
-            pstmt.executeUpdate();
-            logger.info("Currency deleted");
+             PreparedStatement pstmt = connection.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
+
+            pstmt.setString(1, currency.getCurrencyDigitalCode());
+            pstmt.setString(2, currency.getCurrencyLetterCode());
+            pstmt.setString(3, currency.getCurrencyName());
+
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                try (ResultSet rs = pstmt.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        currency.setId(rs.getLong(1));
+                        log.info("Inserted new Currency: {}", currency);
+                    }
+                }
+            }
         } catch (SQLException e) {
-            logger.error("Error deleting Currency", e);
-            throw new RuntimeException("Error deleting Currency", e);
+            log.error("Error inserting into Currency table", e);
+            throw new RuntimeException("Error inserting into Currency table", e);
         }
     }
 
@@ -126,16 +112,12 @@ public class CurrencyJDBCDaoImpl implements Dao<Currency> {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(GET_ALL)) {
+
             while (rs.next()) {
-                currencies.add(Currency.builder()
-                        .id(rs.getLong("id"))
-                        .currencyDigitalCode(rs.getString("currency_digital_code"))
-                        .currencyLetterCode(rs.getString("currency_letter_code"))
-                        .currencyName(rs.getString("currency_name"))
-                        .build());
+                currencies.add(mapResultSetToCurrency(rs));
             }
         } catch (SQLException e) {
-            logger.error("Error fetching all Currencies", e);
+            log.error("Error fetching all Currencies", e);
             throw new RuntimeException("Error fetching all Currencies", e);
         }
         return currencies;
@@ -146,19 +128,14 @@ public class CurrencyJDBCDaoImpl implements Dao<Currency> {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
             pstmt.setLong(1, id);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return Optional.of(Currency.builder()
-                        .id(rs.getLong("id"))
-                        .currencyDigitalCode(rs.getString("currency_digital_code"))
-                        .currencyLetterCode(rs.getString("currency_letter_code"))
-                        .currencyName(rs.getString("currency_name"))
-                        .build());
-            } else {
-                logger.error("Currency with id {} not found.", id);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToCurrency(rs));
+                }
             }
+            log.warn("Currency with id {} not found.", id);
         } catch (SQLException e) {
-            logger.error("Error getting Currency by ID", e);
+            log.error("Error getting Currency by ID", e);
             throw new RuntimeException("Error getting Currency by ID", e);
         }
         return Optional.empty();
@@ -172,11 +149,42 @@ public class CurrencyJDBCDaoImpl implements Dao<Currency> {
             pstmt.setString(2, currency.getCurrencyLetterCode());
             pstmt.setString(3, currency.getCurrencyName());
             pstmt.setLong(4, currency.getId());
-            pstmt.executeUpdate();
-            logger.info("Currency updated: {}", currency);
+
+            int rowsUpdated = pstmt.executeUpdate();
+            if (rowsUpdated > 0) {
+                log.info("Updated Currency: {}", currency);
+            } else {
+                log.warn("No Currency found to update with id {}", currency.getId());
+            }
         } catch (SQLException e) {
-            logger.error("Error updating Currency", e);
+            log.error("Error updating Currency", e);
             throw new RuntimeException("Error updating Currency", e);
         }
+    }
+
+    @Override
+    public void delete(Long id) {
+        try (Connection connection = JDBCConfig.getConnection();
+             PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
+            pstmt.setLong(1, id);
+            int rowsDeleted = pstmt.executeUpdate();
+            if (rowsDeleted > 0) {
+                log.info("Deleted Currency with id {}", id);
+            } else {
+                log.warn("No Currency found to delete with id {}", id);
+            }
+        } catch (SQLException e) {
+            log.error("Error deleting Currency", e);
+            throw new RuntimeException("Error deleting Currency", e);
+        }
+    }
+
+    private Currency mapResultSetToCurrency(ResultSet rs) throws SQLException {
+        return Currency.builder()
+                .id(rs.getLong("id"))
+                .currencyDigitalCode(rs.getString("currency_digital_code"))
+                .currencyLetterCode(rs.getString("currency_letter_code"))
+                .currencyName(rs.getString("currency_name"))
+                .build();
     }
 }

@@ -4,6 +4,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import ru.edme.dao.Dao;
 import ru.edme.model.Account;
+import ru.edme.model.Currency;
+import ru.edme.model.IssuingBank;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -51,19 +53,25 @@ public class AccountService {
         }
 
         try {
+            // Получаем объекты `Currency` и `IssuingBank`
+            Currency currency = Currency.builder().id(currencyId).build();
+            IssuingBank issuingBank = IssuingBank.builder().id(issuingBankId).build();
+
             Account account = Account.builder()
                     .accountNumber(accountNumber)
                     .balance(balance)
-                    .currencyId(currencyId)
-                    .issuingBankId(issuingBankId)
+                    .currency(currency)  // ✅ Передаём объект, а не `Long`
+                    .issuingBank(issuingBank)  // ✅ Передаём объект, а не `Long`
                     .build();
+
             accountDao.insert(account);
-            logger.info("✅ Account added: " + accountNumber);
+            logger.info("✅ Account added: {}", accountNumber);
         } catch (RuntimeException e) {
-            logger.error("Error in addAccount: " + e.getMessage());
+            logger.error("Error in addAccount: {}", e.getMessage(), e);
             throw new RuntimeException("Error in addAccount: " + e.getMessage(), e);
         }
     }
+
 
     public List<Account> getAllAccounts() {
         try {

@@ -1,15 +1,23 @@
 package ru.edme.model;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
-@ToString
-@Builder
+@Data
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
@@ -20,7 +28,7 @@ public class Card {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(name = "card_number", nullable = false, length = 50)
+  @Column(name = "card_number", nullable = false, length = 50, unique = true)
   private String cardNumber;
 
   @Column(name = "expiration_date", nullable = false)
@@ -29,36 +37,24 @@ public class Card {
   @Column(name = "holder_name", nullable = false, length = 50)
   private String holderName;
 
-  @Column(name = "card_status_id", nullable = false)
-  private Long cardStatusId;
+  // Связь с `CardStatus`
+  @ManyToOne
+  @JoinColumn(name = "card_status_id", nullable = false)
+  private CardStatus cardStatus;
 
-  @Column(name = "payment_system_id", nullable = false)
-  private Long paymentSystemId;
+  // Связь с `PaymentSystem`
+  @ManyToOne
+  @JoinColumn(name = "payment_system_id", nullable = false)
+  private PaymentSystem paymentSystem;
 
-  @Column(name = "account_id", nullable = false)
-  private Long accountId;
+  // Связь с `Account`
+  @ManyToOne
+  @JoinColumn(name = "account_id", nullable = false)
+  private Account account;
 
-  @Column(name = "received_from_issuing_bank", nullable = true)
+  @Column(name = "received_from_issuing_bank")
   private LocalDateTime receivedFromIssuingBank;
 
-  @Column(name = "sent_to_issuing_bank", nullable = true)
+  @Column(name = "sent_to_issuing_bank")
   private LocalDateTime sentToIssuingBank;
-
-  public CardBuilder toBuilder(){
-
-      return Card.builder()
-              .id(id)
-              .cardNumber(cardNumber)
-              .expirationDate(expirationDate)
-              .holderName(holderName)
-              .cardStatusId(cardStatusId)
-              .paymentSystemId(paymentSystemId)
-              .accountId(accountId)
-              .receivedFromIssuingBank(receivedFromIssuingBank)
-              .sentToIssuingBank(sentToIssuingBank);
-
-  }
-
-
 }
-

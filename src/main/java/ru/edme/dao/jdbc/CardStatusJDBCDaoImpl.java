@@ -1,7 +1,7 @@
 package ru.edme.dao.jdbc;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Repository;
 import ru.edme.configuration.JDBCConfig;
 import ru.edme.dao.Dao;
 import ru.edme.model.CardStatus;
@@ -15,8 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
+@Repository
 public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
-    private static final Logger logger = LogManager.getLogger(CardStatusJDBCDaoImpl.class);
+
     private static final String CREATE_TABLE = """
             CREATE TABLE IF NOT EXISTS card_status (
                 id SERIAL PRIMARY KEY,
@@ -37,45 +39,41 @@ public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
     private static final String DELETE = "DELETE FROM card_status WHERE id = ?;";
     private static final String DROP_TABLE = "DROP TABLE IF EXISTS card_status CASCADE";
     private static final String CLEAR_TABLE = "DELETE FROM card_status;";
-    private static final CardStatusJDBCDaoImpl INSTANCE = new CardStatusJDBCDaoImpl();
-
-    public static CardStatusJDBCDaoImpl getInstance() {
-        return INSTANCE;
-    }
 
     @Override
     public void createTable() {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
             stmt.executeUpdate(CREATE_TABLE);
+            log.info("Created CardStatus table successfully.");
         } catch (SQLException e) {
-            logger.error("Error creating CardStatus table", e);
+            log.error("Error creating CardStatus table", e);
             throw new RuntimeException("Error creating CardStatus table", e);
         }
     }
 
     @Override
     public void dropTable() {
-        logger.info("Dropping CardStatus table....");
+        log.info("Dropping CardStatus table...");
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
             stmt.executeUpdate(DROP_TABLE);
-            logger.info("Dropped CardStatus table successfully");
+            log.info("Dropped CardStatus table successfully.");
         } catch (SQLException e) {
-            logger.error("Error dropping CardStatus table", e);
+            log.error("Error dropping CardStatus table", e);
             throw new RuntimeException("Error dropping CardStatus table", e);
         }
     }
 
     @Override
     public void clearTable() {
-        logger.info("Clearing all data from CardStatus table");
+        log.info("Clearing all data from CardStatus table...");
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement()) {
             stmt.executeUpdate(CLEAR_TABLE);
-            logger.info("CardStatus have been cleared");
+            log.info("CardStatus table cleared.");
         } catch (SQLException e) {
-            logger.error("Error clearing CardStatus table", e);
+            log.error("Error clearing CardStatus table", e);
             throw new RuntimeException("Error clearing CardStatus table", e);
         }
     }
@@ -91,11 +89,12 @@ public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
                 try (ResultSet rs = pstmt.getGeneratedKeys()) {
                     if (rs.next()) {
                         cardStatus.setId(rs.getLong(1));
+                        log.info("Inserted new CardStatus: {}", cardStatus);
                     }
                 }
             }
         } catch (SQLException e) {
-            logger.error("Error inserting into CardStatus table", e);
+            log.error("Error inserting into CardStatus table", e);
             throw new RuntimeException("Error inserting into CardStatus table", e);
         }
     }
@@ -104,17 +103,17 @@ public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(GET_BY_NAME)) {
             pstmt.setString(1, cardStatusName);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return Optional.of(new CardStatus(
-                        rs.getLong("id"),
-                        rs.getString("card_status_name")
-                ));
-            } else {
-                logger.error("CardStatus with name {} not found", cardStatusName);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new CardStatus(
+                            rs.getLong("id"),
+                            rs.getString("card_status_name")
+                    ));
+                }
             }
+            log.warn("CardStatus with name '{}' not found.", cardStatusName);
         } catch (SQLException e) {
-            logger.error("Error fetching CardStatus by name", e);
+            log.error("Error fetching CardStatus by name", e);
             throw new RuntimeException("Error fetching CardStatus by name", e);
         }
         return Optional.empty();
@@ -126,6 +125,7 @@ public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
         try (Connection connection = JDBCConfig.getConnection();
              Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(GET_ALL)) {
+
             while (rs.next()) {
                 statuses.add(new CardStatus(
                         rs.getLong("id"),
@@ -133,7 +133,7 @@ public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
                 ));
             }
         } catch (SQLException e) {
-            logger.error("Error fetching all CardStatuses", e);
+            log.error("Error fetching all CardStatuses", e);
             throw new RuntimeException("Error fetching all CardStatuses", e);
         }
         return statuses;
@@ -144,17 +144,17 @@ public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(GET_BY_ID)) {
             pstmt.setLong(1, id);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return Optional.of(new CardStatus(
-                        rs.getLong("id"),
-                        rs.getString("card_status_name")
-                ));
-            } else {
-                logger.error("CardStatus with id {} not found", id);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new CardStatus(
+                            rs.getLong("id"),
+                            rs.getString("card_status_name")
+                    ));
+                }
             }
+            log.warn("CardStatus with id {} not found.", id);
         } catch (SQLException e) {
-            logger.error("Error fetching CardStatus by ID", e);
+            log.error("Error fetching CardStatus by ID", e);
             throw new RuntimeException("Error fetching CardStatus by ID", e);
         }
         return Optional.empty();
@@ -166,10 +166,14 @@ public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
              PreparedStatement pstmt = connection.prepareStatement(UPDATE)) {
             pstmt.setString(1, cardStatus.getCardStatusName());
             pstmt.setLong(2, cardStatus.getId());
-            pstmt.executeUpdate();
-            logger.info("CardStatus updated: " + cardStatus);
+            int rowsUpdated = pstmt.executeUpdate();
+            if (rowsUpdated > 0) {
+                log.info("Updated CardStatus: {}", cardStatus);
+            } else {
+                log.warn("No CardStatus found to update with id {}", cardStatus.getId());
+            }
         } catch (SQLException e) {
-            logger.error("Error updating CardStatus", e);
+            log.error("Error updating CardStatus", e);
             throw new RuntimeException("Error updating CardStatus", e);
         }
     }
@@ -179,10 +183,14 @@ public class CardStatusJDBCDaoImpl implements Dao<CardStatus> {
         try (Connection connection = JDBCConfig.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(DELETE)) {
             pstmt.setLong(1, id);
-            pstmt.executeUpdate();
-            logger.info("CardStatus deleted: " + id);
+            int rowsDeleted = pstmt.executeUpdate();
+            if (rowsDeleted > 0) {
+                log.info("Deleted CardStatus with id {}", id);
+            } else {
+                log.warn("No CardStatus found to delete with id {}", id);
+            }
         } catch (SQLException e) {
-            logger.error("Error deleting CardStatus", e);
+            log.error("Error deleting CardStatus", e);
             throw new RuntimeException("Error deleting CardStatus", e);
         }
     }
