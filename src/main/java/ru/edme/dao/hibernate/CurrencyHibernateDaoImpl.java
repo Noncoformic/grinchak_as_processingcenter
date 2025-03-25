@@ -3,16 +3,13 @@ package ru.edme.dao.hibernate;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import ru.edme.dao.Dao;
 import ru.edme.model.Currency;
 
 import java.util.List;
 import java.util.Optional;
 @Slf4j
-@Transactional
 @Repository
 public class CurrencyHibernateDaoImpl implements Dao<Currency> {
 

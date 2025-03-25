@@ -1,45 +1,49 @@
 package ru.edme.service;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import ru.edme.dao.Dao;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.edme.model.IssuingBank;
+import ru.edme.repository.IssuingBankRepository;
 
 import java.util.List;
 import java.util.Optional;
 
+@Service
+@RequiredArgsConstructor
 public class IssuingBankService {
-    private static final Logger logger = LogManager.getLogger(IssuingBankService.class);
-    private final Dao<IssuingBank> issuingBankDao;
 
-    public IssuingBankService(Dao<IssuingBank> issuingBankDao) {
-        this.issuingBankDao = issuingBankDao;
+    private final IssuingBankRepository repository;
+
+    public IssuingBank save(IssuingBank issuingBank) {
+        validateNotNull(issuingBank, "IssuingBank must not be null");
+        return repository.save(issuingBank);
     }
 
-    public void createTable() {
-        issuingBankDao.createTable();
+    public IssuingBank update(IssuingBank issuingBank) {
+        validateNotNull(issuingBank, "IssuingBank must not be null");
+        return repository.save(issuingBank);
     }
 
-    public void clearTable() {
-        issuingBankDao.clearTable();
+    @Transactional
+    public void delete(Long id) {
+        validateNotNull(id, "ID must not be null");
+        repository.deleteById(id);
     }
 
-    public void dropTable() {
-        issuingBankDao.dropTable();
+    public Optional<IssuingBank> findById(Long id) {
+        validateNotNull(id, "ID must not be null");
+        return repository.findById(id);
     }
 
-    public void addIssuingBank(String bic, String abbreviatedName) {
+    public List<IssuingBank> findAll() {
+        return repository.findAll();
+    }
 
-        if (issuingBankDao.getAll().stream().anyMatch(issuingBank -> issuingBank.getBic().equals(bic))) {
-            logger.warn("⚠️ IssuingBank '{}' already exists. Skipping insert.", bic);
-            return;
+    private void validateNotNull(Object obj, String message) {
+        if (obj == null) {
+            throw new IllegalArgumentException(message);
         }
-        IssuingBank bank = IssuingBank.builder()
-                .bic(bic)
-                .abbreviatedName(abbreviatedName)
-                .build();
-        issuingBankDao.insert(bank);
-        logger.info("✅ IssuingBank added: bic: " + bic + ", Name: " + abbreviatedName);
     }
 
 }

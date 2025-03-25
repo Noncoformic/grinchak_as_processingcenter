@@ -1,113 +1,48 @@
 package ru.edme.service;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import ru.edme.dao.Dao;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.edme.model.Account;
-import ru.edme.model.Currency;
-import ru.edme.model.IssuingBank;
+import ru.edme.repository.AccountRepository;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+@Service
+@RequiredArgsConstructor
+
 public class AccountService {
-    private static final Logger logger = LogManager.getLogger(AccountService.class);
-    private final Dao<Account> accountDao;
+    private final AccountRepository repository;
 
-    public AccountService(Dao<Account> accountDao) {
-        this.accountDao = accountDao;
+    public Account save(Account account) {
+        validateNotNull(account, "Account must not be null");
+        return repository.save(account);
     }
 
-    public void createTable() {
-        try {
-            accountDao.createTable();
-        }catch (RuntimeException e){
-            logger.error("Error in createTable: " + e.getMessage());
-            throw new RuntimeException("Error in createTable: " + e.getMessage(), e);
-        }
+    public Account update(Account account) {
+        validateNotNull(account, "Account must not be null");
+        return repository.save(account);
     }
 
-    public void clearTable() {
-        try {
-            accountDao.clearTable();
-        }catch (RuntimeException e){
-            logger.error("Error in clearTable: " + e.getMessage());
-            throw new RuntimeException("Error in clearTable: " + e.getMessage(), e);
-        }
+    @Transactional
+    public void delete(Long id) {
+        validateNotNull(id, "ID must not be null");
+        repository.deleteById(id);
     }
 
-    public void dropTable() {
-        try {
-            accountDao.dropTable();
-        }catch (RuntimeException e){
-            logger.error("Error in dropTable: " + e.getMessage());
-            throw new RuntimeException("Error in dropTable: " + e.getMessage(), e);
-        }
+    public Optional<Account> findById(Long id) {
+        validateNotNull(id, "ID must not be null");
+        return repository.findById(id);
     }
 
-    public void addAccount(String accountNumber, BigDecimal balance, Long currencyId, Long issuingBankId) {
-        if (accountDao.getAll().stream().anyMatch(account -> account.getAccountNumber().equals(accountNumber))) {
-            logger.warn("⚠️ Account '{}' already exists. Skipping insert.", accountNumber);
-            return;
-        }
-
-        try {
-            // Получаем объекты `Currency` и `IssuingBank`
-            Currency currency = Currency.builder().id(currencyId).build();
-            IssuingBank issuingBank = IssuingBank.builder().id(issuingBankId).build();
-
-            Account account = Account.builder()
-                    .accountNumber(accountNumber)
-                    .balance(balance)
-                    .currency(currency)  // ✅ Передаём объект, а не `Long`
-                    .issuingBank(issuingBank)  // ✅ Передаём объект, а не `Long`
-                    .build();
-
-            accountDao.insert(account);
-            logger.info("✅ Account added: {}", accountNumber);
-        } catch (RuntimeException e) {
-            logger.error("Error in addAccount: {}", e.getMessage(), e);
-            throw new RuntimeException("Error in addAccount: " + e.getMessage(), e);
-        }
+    public List<Account> findAll() {
+        return repository.findAll();
     }
 
-
-    public List<Account> getAllAccounts() {
-        try {
-            return accountDao.getAll();
-        } catch (RuntimeException e) {
-            logger.error("Error in getAllAccounts: " + e.getMessage());
-            throw new RuntimeException("Error in getAllAccounts: " + e.getMessage(), e);
-        }
-    }
-
-    public Optional<Account> getAccountById(Long id) {
-        try {
-            return accountDao.getById(id);
-        } catch (RuntimeException e) {
-            logger.error("Error in getAccountById: " + e.getMessage());
-            throw new RuntimeException("Error in getAccountById: " + e.getMessage(), e);
-        }
-    }
-
-    public void deleteAccount(Long id) {
-        try {
-            accountDao.delete(id);
-            logger.info("❌ Account deleted: " + id);
-        } catch (RuntimeException e) {
-            logger.error("Error in deleteAccount: " + e.getMessage());
-            throw new RuntimeException("Error in deleteAccount: " + e.getMessage(), e);
-        }
-    }
-
-    public void updateAccount(Account account) {
-        try {
-            accountDao.update(account);
-            logger.info("🔄 Account updated: " + account.getAccountNumber());
-        } catch (RuntimeException e) {
-            logger.error("Error in updateAccount: " + e.getMessage());
-            throw new RuntimeException("Error in updateAccount: " + e.getMessage(), e);
+    private void validateNotNull(Object obj, String message) {
+        if (obj == null) {
+            throw new IllegalArgumentException(message);
         }
     }
 }

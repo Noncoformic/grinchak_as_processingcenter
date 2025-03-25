@@ -9,19 +9,21 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.orm.hibernate5.HibernateTransactionManager;
-import org.springframework.orm.hibernate5.LocalSessionFactoryBean;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import javax.sql.DataSource;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 
 @Data
 @Configuration
-@ComponentScan(basePackages = "ru.edme") // Сканирование компонентов
-@EnableTransactionManagement // Управление транзакциями
+@ComponentScan(basePackages = {"ru.edme.service", "ru.edme.dao"})
+@EnableTransactionManagement
 @PropertySource("classpath:database.properties")
+// Удаляем строку @Import(WebConfig.class)
 public class AppConfig {
 
     @Autowired
@@ -37,25 +39,28 @@ public class AppConfig {
         return dataSource;
     }
 
-    @Bean
-    public LocalSessionFactoryBean sessionFactory() {
-        LocalSessionFactoryBean sessionFactory = new LocalSessionFactoryBean();
-        sessionFactory.setDataSource(dataSource());
-        sessionFactory.setPackagesToScan("ru.edme.model");
+    @Bean(name = "entityManagerFactory")
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
+        LocalContainerEntityManagerFactoryBean factoryBean = new LocalContainerEntityManagerFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        factoryBean.setPackagesToScan("ru.edme.model");
+        factoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
 
-        Properties hibernateProperties = new Properties();
-        hibernateProperties.setProperty("hibernate.dialect", environment.getProperty("hibernate.dialect"));
-        hibernateProperties.setProperty("hibernate.show_sql", environment.getProperty("hibernate.show_sql"));
-        hibernateProperties.setProperty("hibernate.hbm2ddl.auto", environment.getProperty("hibernate.hbm2ddl.auto"));
-        hibernateProperties.setProperty("hibernate.format_sql", environment.getProperty("hibernate.format_sql"));
+        factoryBean.setJpaPropertyMap(Map.of(
+                "hibernate.hbm2ddl.auto", "update",
+                "hibernate.show_sql", "true",
+                "hibernate.format_sql", "true"
+        ));
 
-        sessionFactory.setHibernateProperties(hibernateProperties);
-        return sessionFactory;
+        return factoryBean;
     }
 
     @Bean
-    public HibernateTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
-        return new HibernateTransactionManager(entityManagerFactory.unwrap(org.hibernate.SessionFactory.class));
+    public JpaTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactory);
+        return transactionManager;
     }
+
 }
 
