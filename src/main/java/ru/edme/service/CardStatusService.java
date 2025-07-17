@@ -1,49 +1,59 @@
 package ru.edme.service;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.edme.dto.CardStatusDto;
+import ru.edme.mapper.CardStatusMapper;
 import ru.edme.model.CardStatus;
 import ru.edme.repository.CardStatusRepository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-
+@Transactional
 public class CardStatusService {
 
   private final CardStatusRepository repository;
+  private final CardStatusMapper mapper;
 
-  public CardStatus save(CardStatus cardStatus) {
-    validateNotNull(cardStatus, "CardStatus must not be null");
-    return repository.save(cardStatus);
+  public CardStatusDto create(CardStatusDto dto) {
+    CardStatus entity = mapper.toEntity(dto);
+    CardStatus saved = repository.save(entity);
+    return mapper.toDto(saved);
   }
 
-  public CardStatus update(CardStatus cardStatus) {
-    validateNotNull(cardStatus, "CardStatus must not be null");
-    return repository.save(cardStatus);
-  }
-
-  @Transactional
-  public void delete(Long id) {
-    validateNotNull(id, "ID must not be null");
-    repository.deleteById(id);
-  }
-
-  public Optional<CardStatus> findById(Long id) {
-    validateNotNull(id, "ID must not be null");
-    return repository.findById(id);
-  }
-
-  public List<CardStatus> findAll() {
-    return repository.findAll();
-  }
-
-  private void validateNotNull(Object obj, String message) {
-    if (obj == null) {
-      throw new IllegalArgumentException(message);
+  public CardStatusDto update(Long id, CardStatusDto dto) {
+    if (!repository.existsById(id)) {
+      throw new EntityNotFoundException("CardStatus with id=" + id + " not found");
     }
+    CardStatus entity = mapper.toEntity(dto);
+    entity.setId(id);
+    CardStatus saved = repository.save(entity);
+    return mapper.toDto(saved);
+  }
+
+  @Transactional(readOnly = true)
+  public CardStatusDto getById(Long id) {
+    CardStatus entity = repository.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("CardStatus with id=" + id + " not found"));
+    return mapper.toDto(entity);
+  }
+
+  @Transactional(readOnly = true)
+  public List<CardStatusDto> getAll() {
+    return repository.findAll()
+            .stream()
+            .map(mapper::toDto)
+            .toList();
+  }
+
+  public void delete(Long id) {
+    if (!repository.existsById(id)) {
+      throw new EntityNotFoundException("CardStatus with id=" + id + " not found");
+    }
+    repository.deleteById(id);
   }
 }

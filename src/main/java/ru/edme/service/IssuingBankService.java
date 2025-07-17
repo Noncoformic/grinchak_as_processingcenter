@@ -1,49 +1,64 @@
 package ru.edme.service;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.edme.dto.IssuingBankDto;
+import ru.edme.mapper.IssuingBankMapper;
 import ru.edme.model.IssuingBank;
 import ru.edme.repository.IssuingBankRepository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class IssuingBankService {
 
     private final IssuingBankRepository repository;
+    private final IssuingBankMapper mapper;
 
-    public IssuingBank save(IssuingBank issuingBank) {
-        validateNotNull(issuingBank, "IssuingBank must not be null");
-        return repository.save(issuingBank);
+    /** Создать банк-эмитент */
+    public IssuingBankDto create(IssuingBankDto dto) {
+        IssuingBank entity = mapper.toEntity(dto);
+        IssuingBank saved = repository.save(entity);
+        return mapper.toDto(saved);
     }
 
-    public IssuingBank update(IssuingBank issuingBank) {
-        validateNotNull(issuingBank, "IssuingBank must not be null");
-        return repository.save(issuingBank);
+    /** Обновить банк-эмитент по ID */
+    public IssuingBankDto update(Long id, IssuingBankDto dto) {
+        if (!repository.existsById(id)) {
+            throw new EntityNotFoundException("IssuingBank with id=" + id + " not found");
+        }
+        IssuingBank entity = mapper.toEntity(dto);
+        entity.setId(id);
+        IssuingBank saved = repository.save(entity);
+        return mapper.toDto(saved);
     }
 
-    @Transactional
+    /** Получить банк-эмитент по ID */
+    @Transactional(readOnly = true)
+    public IssuingBankDto getById(Long id) {
+        IssuingBank entity = repository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("IssuingBank with id=" + id + " not found"));
+        return mapper.toDto(entity);
+    }
+
+    /** Получить все банки-эмитенты */
+    @Transactional(readOnly = true)
+    public List<IssuingBankDto> getAll() {
+        return repository.findAll()
+                .stream()
+                .map(mapper::toDto)
+                .toList();
+    }
+
+    /** Удалить банк-эмитент по ID */
     public void delete(Long id) {
-        validateNotNull(id, "ID must not be null");
+        if (!repository.existsById(id)) {
+            throw new EntityNotFoundException("IssuingBank with id=" + id + " not found");
+        }
         repository.deleteById(id);
     }
-
-    public Optional<IssuingBank> findById(Long id) {
-        validateNotNull(id, "ID must not be null");
-        return repository.findById(id);
-    }
-
-    public List<IssuingBank> findAll() {
-        return repository.findAll();
-    }
-
-    private void validateNotNull(Object obj, String message) {
-        if (obj == null) {
-            throw new IllegalArgumentException(message);
-        }
-    }
-
 }

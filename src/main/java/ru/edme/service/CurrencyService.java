@@ -1,50 +1,64 @@
 package ru.edme.service;
 
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.edme.dto.CurrencyDto;
+import ru.edme.mapper.CurrencyMapper;
 import ru.edme.model.Currency;
 import ru.edme.repository.CurrencyRepository;
 
 import java.util.List;
-import java.util.Optional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class CurrencyService {
 
     private final CurrencyRepository repository;
+    private final CurrencyMapper mapper;
 
-    public Currency save(Currency currency) {
-        validateNotNull(currency, "Currency must not be null");
-        return repository.save(currency);
+    /** Создать новую валюту */
+    public CurrencyDto create(CurrencyDto dto) {
+        Currency entity = mapper.toEntity(dto);
+        Currency saved = repository.save(entity);
+        return mapper.toDto(saved);
     }
 
-    public Currency update(Currency currency) {
-        validateNotNull(currency, "Currency must not be null");
-        return repository.save(currency);
-    }
-
-    @Transactional
-    public void delete(Long id) {
-        validateNotNull(id, "ID must not be null");
-        repository.deleteById(id);
-    }
-
-    public Optional<Currency> findById(Long id) {
-        validateNotNull(id, "ID must not be null");
-        return repository.findById(id);
-    }
-
-    public List<Currency> findAll() {
-        return repository.findAll();
-    }
-
-    private void validateNotNull(Object obj, String message) {
-        if (obj == null) {
-            throw new IllegalArgumentException(message);
+    /** Обновить существующую валюту по ID */
+    public CurrencyDto update(Long id, CurrencyDto dto) {
+        if (!repository.existsById(id)) {
+            throw new EntityNotFoundException("Currency with id=" + id + " not found");
         }
+        Currency entity = mapper.toEntity(dto);
+        entity.setId(id);
+        Currency saved = repository.save(entity);
+        return mapper.toDto(saved);
+    }
+
+    /** Получить валюту по ID */
+    @Transactional(readOnly = true)
+    public CurrencyDto getById(Long id) {
+        Currency entity = repository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Currency with id=" + id + " not found"));
+        return mapper.toDto(entity);
+    }
+
+    /** Получить все валюты */
+    @Transactional(readOnly = true)
+    public List<CurrencyDto> getAll() {
+        return repository.findAll()
+                .stream()
+                .map(mapper::toDto)
+                .toList();
+    }
+
+    /** Удалить валюту по ID */
+    public void delete(Long id) {
+        if (!repository.existsById(id)) {
+            throw new EntityNotFoundException("Currency with id=" + id + " not found");
+        }
+        repository.deleteById(id);
     }
 }

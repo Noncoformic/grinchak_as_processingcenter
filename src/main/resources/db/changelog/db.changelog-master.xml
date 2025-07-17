@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+          http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.26.xsd">
+
+    <!-- Схема (DDL) -->
+    <include file="db/changelog/schema/001-create-currency.sql"/>
+    <include file="db/changelog/schema/002-create-issuing_bank.sql"/>
+    <include file="db/changelog/schema/003-create-account.sql"/>
+    <include file="db/changelog/schema/004-create-card_status.sql"/>
+    <include file="db/changelog/schema/005-create-payment_system.sql"/>
+    <include file="db/changelog/schema/006-create-card.sql"/>
+    <include file="db/changelog/schema/007-create-acquiring_bank.sql"/>
+    <include file="db/changelog/schema/008-create-sales_point.sql"/>
+    <include file="db/changelog/schema/009-create-merchant_category_code.sql"/>
+    <include file="db/changelog/schema/010-create-terminal.sql"/>
+    <include file="db/changelog/schema/011-create-transaction_type.sql"/>
+    <include file="db/changelog/schema/012-create-response_code.sql"/>
+    <include file="db/changelog/schema/013-create-transaction.sql"/>
+
+    <!-- Данные (SEED) -->
+    <include file="db/changelog/seed/101-refdata.sql" context="prod,dev"/>
+    <include file="db/changelog/seed/201-dev-demo.sql" context="dev"/>
+    <include file="db/changelog/seed/202-e2e-tests.sql" context="e2e"/>
+</databaseChangeLog>
